@@ -1,0 +1,749 @@
+;Shyam Pinnipati, Nguyen Ngo
+	.EQU KBD_CNTL, $000
+	.EQU KBD_STAT, $000
+	.EQU KBD_DATA, $001
+	.EQU KBD_FLUSH, $40
+	.EQU TIM_CNTL, $030
+	.EQU TIM_STAT, $030
+	.EQU TIM_RELOAD, $031
+	.EQU TIM_COUNT, $034
+
+	.EQU INTERRUPT_ENA, $80
+	.EQU RESET_READY_BIT, $40
+	.EQU START_AFTER_LOAD, $10
+	.EQU ENABLE_RESET_AND_START, $D0
+	.EQU ENABLE_AND_RESET, $C0
+
+	.EQU CRT_BUFFER, $100
+	.EQU BOTTOM_RIGHT, $313
+	.EQU CRT_XREG, $314
+	.EQU CRT_YREG, $315
+	.EQU CRT_CNTL, $316
+	.EQU CRT_DATA, $317
+	.EQU CRT_ROWS, $0E
+	.EQU CRT_COLS, $26
+	.EQU CLEAR_DISPLAY, $01
+	.EQU HOME, $04
+
+	.EQU PUT_NUM, $E00 ; MINI_OS JSRS
+	.EQU GET_NUM, $E01
+	.EQU PUT_STR, $E05
+	.EQU PUT_NL, $E06
+	.EQU PUT_NUM2, $E07
+	.EQU PUT_CHR, $E08
+
+	.EQU QUIT, 'x'
+	.EQU START, $0D ;enter key
+	;.EQU NO_BODY, ' '
+	.EQU FOOD, 'F'
+	;.EQU NOKKEY, 'n'
+	.EQU Q_SIZE, 600
+	.EQU PLAY_CNT, 1 ;keep snake in play
+	.EQU SCORE_CNT, 2 ;display score
+	.EQU COUNTDOWN, 3 ;start countdown
+	.EQU PAUSE_GAME, 4 ;pause game
+	.EQU TOP, 0 ;top wall of CRT
+	.EQU BOTTOM, 13 ;bottom wall of CRT
+	.EQU LEFT, 0 ;left wall of CRT
+	.EQU RIGHT, 37 ;right wall of CRT
+	.EQU KEY_UP, 3 ;ESC + "H"
+	.EQU KEY_LEFT, 4 ;ESC + "K"
+          	.EQU KEY_RIGHT, 5 ;ESC + "M"
+          	.EQU KEY_DOWN, 2 ;ESC + "P"
+	.EQU SPACE, $20 ;space key
+	;.EQU MAX, 33
+	.EQU	CUSTOM_HEAD, $D6
+	LDS# $E00
+	CIE
+	LDA# 3
+	STA lives
+	;CLR lives ;temp
+	;LDA# 2 ;temp
+	STA status
+	CLR score
+	;LDA# 5 ;temp
+	STA timerCount
+	LDA orig_delay
+	STA delay
+	PSH# seedlen ;ask for seed
+	PSH# seed_prompt
+	JSR PUT_STR
+	ADS# 2
+	JSR GET_NUM
+	STA seed
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	JSR showIntro
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+get_char_loop:	PSH# char_len
+	PSH# char_prompt
+	JSR PUT_STR
+	ADS# 2
+	JSR GET_NUM
+	CMA# 33
+	JLT get_char_loop
+	CMA# 126
+	JGE get_char_loop
+	STA BODY
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	;PSH score
+	;PSH lives
+	;JSR showScore
+	;ADS# 3
+	LDA# KEYISR
+	STA $FF8
+	LDA# ENABLE_AND_RESET
+	OUTB KBD_CNTL
+	LDA delay
+	OUTW TIM_RELOAD
+	LDA# TIMERISR
+	STA $FFB
+	LDA# ENABLE_RESET_AND_START
+	OUTB TIM_CNTL
+	SIE
+mainloop:	NOP
+	JMP mainloop
+	
+	.equ upperbound, 3
+	.equ temp, 2
+rand:	BGN# 0
+	PSHA
+	lda	seed
+	mul#	2779
+	ada#	1997
+	mod#	2048
+	sta	seed
+	inc !	upperbound
+	mod !	upperbound
+	STA* ! temp
+	POPA
+	FIN# 0
+	RTN
+	
+	.EQU KEY, 3
+	.EQU dummyDirection, 4
+
+;	void showIntro()
+showIntro:	BGN# 2
+	PSHA
+	PSH# STRING1L
+	PSH# STRING1
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING2L
+	PSH# STRING2
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING3L
+	PSH# STRING3
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING4L	
+	PSH# STRING4
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING5L	
+	PSH# STRING5
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING6L	
+	PSH# STRING6
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING7L
+	PSH# STRING7
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING8L
+	PSH# STRING8
+	JSR PUT_STR
+	ADS# 2
+	
+	PSH# STRING9L
+	PSH# STRING9
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING10L
+	PSH# STRING10
+	JSR PUT_STR
+	ADS# 2
+
+	PSH# STRING11L
+	PSH# STRING11
+	JSR PUT_STR
+	ADS# 2
+	LDA# 100
+	OUTB CRT_YREG
+poll:	INB KBD_STAT
+	JGE poll
+	INB KBD_DATA
+	CMA# START
+	JNE poll
+endIntro:	POPA
+	FIN# 2
+	RTN ;works
+	
+	.equ BODY_ST, 11
+	.equ curr_head, 10
+	.equ curr_tail, 9
+	.equ curr_dir, 8
+	.equ curr_Q, 7 ;use indirect array addressing
+	.equ st_x, 5
+	.equ st_y, 4
+	.equ loc, 3
+	.equ x2, 2
+	.equ y2, 1
+startSnake:	BGN# 5
+	PSHA
+	PSHX
+	PSH# 3
+	PSH !curr_dir
+	JSR rand
+	ADS# 2
+	LDA* !curr_dir
+	ADA# KEY_DOWN
+	STA* !curr_dir
+	PSH# 28
+	PSH# !st_x
+	JSR rand
+	ADS# 2
+	LDA !st_x
+	ADA# 5
+	STA !st_x
+	PSH# 4
+	PSH# !st_y
+	JSR rand
+	ADS# 2
+	LDA !st_y
+	ADA# 5
+	STA !st_y
+	LDA !st_y
+	MUL# 38
+	ADA !st_x
+	STA !loc
+	LDA !st_x
+	ADA# TOP+1
+	OUTB CRT_XREG
+	LDA !st_y
+	ADA# LEFT+1
+	OUTB CRT_YREG
+	;LDA !BODY_ST ;to be replaced with custom char
+	LDA#	CUSTOM_HEAD	;custom head
+	
+	JSR PUT_CHR
+	LDA# 100
+	OUTB CRT_YREG
+	LDA# 3
+	STA* !curr_head
+	CLR* !curr_tail
+	LDA !loc
+	LDX# 3
+	STA& !curr_Q
+	LDX# 2 ;preparing for loop
+body_loop_st:	LDA* !curr_dir
+	CMA# KEY_UP
+	JEQ updir
+	CMA# KEY_DOWN
+	JEQ downdir
+	CMA# KEY_LEFT
+	JEQ leftdir
+	CMA# KEY_RIGHT
+	JEQ rightdir
+updir:	ADX# 1
+	LDA& !curr_Q
+	ADA# 38
+	SBX# 1
+	STA& !curr_Q
+	JMP put_char_st
+downdir:	ADX# 1
+	LDA& !curr_Q
+	SBA# 38
+	SBX# 1
+	STA& !curr_Q
+	JMP put_char_st
+leftdir:	ADX# 1
+	LDA& !curr_Q
+	ADA# 1
+	SBX# 1
+	STA& !curr_Q
+	JMP put_char_st
+rightdir:	ADX# 1
+	LDA& !curr_Q
+	SBA# 1
+	SBX# 1
+	STA& !curr_Q
+put_char_st:	LDA& !curr_Q
+	MOD# 38
+	ADA# LEFT+1
+	OUTB CRT_XREG
+	LDA& !curr_Q
+	DIV# 38
+	ADA# TOP+1
+	OUTB CRT_YREG
+	LDA !BODY_ST ;temp
+	JSR PUT_CHR
+	LDA# 100
+	OUTB CRT_YREG
+	SOJ body_loop_st
+	LDX# 0 ;prep for food loop
+food_loop_st:	PSH# 37
+	PSH# !x2
+	JSR rand
+	ADS# 2
+	LDA !x2
+	SBA !st_x
+	CMA# 0
+	JGE check5x
+	NEGA
+check5x:	CMA# 5
+	JLT food_loop_st
+y2_loop:	PSH# 12
+	PSH# !y2
+	JSR rand
+	ADS# 2
+	LDA !y2
+	SBA !st_y
+	CMA# 0
+	JGE check5y
+	NEGA
+check5y:	CMA# 5
+	JLT y2_loop
+	LDA !y2
+	MUL# 38
+	ADA !x2
+	ADA# 64
+	STA !loc
+	INB !loc
+	CMA# FOOD
+	JEQ food_loop_rest
+	LDA !x2
+	ADA# LEFT+1
+	OUTB CRT_XREG
+	LDA !y2
+	ADA# TOP+1
+	OUTB CRT_YREG
+	LDA# FOOD
+	JSR PUT_CHR
+	LDA# 100
+	OUTB CRT_YREG
+	AOC# 5
+	JLT food_loop_st	
+end_st:	POPX
+	POPA
+	FIN#5
+	RTN
+food_loop_rest:	SBX# 1
+	JMP food_loop_st
+
+	.EQU NEWLOC, 0	;LOCAL VAR
+	.EQU OKK, 1	;LOCAL VAR
+	.EQU FOODFLAG, 2	;LOCAL VAR
+	.EQU TEMPRAND,3	;LOCAL VAR
+	.EQU SCORE_F, 6
+	.EQU Q_F, 7	;ARRAY
+	.EQU DIRECTION_F, 8
+	.EQU TAIL_F, 9
+	.EQU HEAD_F, 10
+	.EQU BODY_MV, 11
+	.EQU DELAY_CHG, 12
+
+moveSnake:	PSHF
+	SBS# 	4
+	TSF
+
+	LDX*	!HEAD_F	;XR = *HEAD
+	LDA&	!Q_F	;ACC = Q[*HEAD]
+	STA	!NEWLOC	;NEWLOC = Q[*HEAD]
+	LDA	!DIRECTION_F
+	CMA#	KEY_UP	;IF DIRECTION IS UP $48
+	JEQ 	NEWLOC_UP
+	CMA#	KEY_DOWN	;IF DIRECTION IS DOWN $50
+	JEQ	NEWLOC_DOWN
+	CMA#	KEY_RIGHT	;IF DIRECTION IS RIGHT $4D
+	JEQ	NEWLOC_RIGHT
+	CMA#	KEY_LEFT	;IF DIRECTION IS LEFT $4B
+	JEQ	NEWLOC_LEFT
+	JMP 	END
+
+NEWLOC_UP:	LDA	!NEWLOC
+	SBA#	38	; newLoc -= 38
+	STA	!NEWLOC
+	CMA#	0	;NEWLOC > 0?
+	JGE	SETOKK1
+	JLT	SETOKK0
+
+NEWLOC_DOWN:	LDA	!NEWLOC
+	ADA#	38	;NEWLOC += 38
+	STA	!NEWLOC
+	CMA#	531	;NEWLOC < 531?
+	JLE	SETOKK1
+	JGT	SETOKK0
+
+NEWLOC_RIGHT:	LDA	!NEWLOC
+	ADA#	1	;NEWLOC += 1
+	STA	!NEWLOC
+	MOD#	38	
+	CMA#	0
+	JNE	SETOKK1	;NEWLOC % 38 != 0
+	JEQ	SETOKK0	;NEWLOC % 38 == 0
+
+NEWLOC_LEFT:	LDA	!NEWLOC
+	SBA#	1
+	STA	!NEWLOC
+	MOD#	38
+	CMA#	37
+	JNE	SETOKK1	;NEWLOC % 38 != 37
+	JEQ	SETOKK0	;NEWLOC % 38 == 37
+	
+SETOKK1:	LDA#	1
+	STA	!OKK
+	JMP 	IFOKK1
+SETOKK0:	LDA#	0
+	STA	!OKK
+	JMP	END
+
+IFOKK1:	LDX	!NEWLOC	;IF(CRT[Y][Y] == BODY) OKK = FALSE
+	INB+	CRT_BUFFER
+	CMA	!BODY_MV	;IS THE NEW LOCATION PART OF THE SNAKE BODY?
+	JEQ	SETOKK0	;IF YES, THEN OKK = FALSE
+	
+	CMA#	FOOD	;ELSE IS THE NEW LOCATION A FOOD?
+	JEQ	EATFOOD	;SET FOODFLAG
+	JMP	ADDBODY	;IF NOT FOOD THEN SKIP SETTING FOOD FLAG
+	
+EATFOOD:	LDA#	1
+	STA	!FOODFLAG	;IF NEW LOCATION IS A FOOD, THEN FOODFLAG = 1
+;
+;
+;
+;
+;
+;
+ADDBODY:	;LDA	!BODY_MV
+	LDA#	CUSTOM_HEAD
+	OUTB+	CRT_BUFFER	;PUTCHAR(head,X,Y)
+	LDX*	!HEAD_F	;++MEMORY[*HEAD]
+
+	;SET HEAD - 1 = BODY
+	LDA&	!Q_F
+	TAX
+	LDA	!BODY_MV
+	OUTB+	CRT_BUFFER
+	LDX*	!HEAD_F
+	;
+	ADX#	1
+	STX*	!HEAD_F	;HEAD+1
+	CMX#	Q_SIZE
+	;
+	JGE	SETHEAD0
+	JMP	SETQHEADNEWLOC
+
+;
+;
+;
+;
+
+SETHEAD0:	CLR*	!HEAD_F	
+SETQHEADNEWLOC:LDA	!NEWLOC
+	LDX*	!HEAD_F	;IN CASE WHERE HEAD_F WAS CLEARED
+	STA&	!Q_F	;Q[*HEAD] = NEWLOC
+
+	LDA	!FOODFLAG
+	CMA#	1
+	JEQ	INCREMENTSCORE
+	JNE	NOFOOD
+
+INCREMENTSCORE:INC*	!SCORE_F
+NEWFOODLOC:	PSH#	531	;CREATE RANDOM LOCATION FROM 0-531
+	PSH#	!TEMPRAND
+	JSR	rand
+	ADS#	2	
+	LDX	!TEMPRAND
+	INB+	CRT_BUFFER	;
+	CMA	!BODY_MV	;
+	JEQ	NEWFOODLOC	;IF RANDOM LOCATION IS A FOOD OR A BODY, THEN REPEAT LOOP
+	CMA#	FOOD	;
+	JEQ	NEWFOODLOC	;
+
+	LDA# 	FOOD
+	OUTB+	CRT_BUFFER	;SET A NEW FOOD LOCATION
+	LDA* 	!DELAY_CHG	;every time a food is eaten, snake speed goes up
+	MUL#	10
+	DIV#	11
+	STA* 	!DELAY_CHG
+	OUTW 	TIM_RELOAD
+	JMP 	END	;DONT INCREMENT TAIL POINTER
+	
+NOFOOD:	LDX*	!TAIL_F	;DELETE TAIL XR=0
+	LDA&	!Q_F	;ACC = Q[*TAIL]
+	TAX		;
+	LDA#	SPACE	;NO BODY
+	OUTB+	CRT_BUFFER	; 
+
+	LDX*	!TAIL_F	;INCREMENT TAIL POINTER
+	ADX#	1
+	STX*	!TAIL_F
+	CMX#	Q_SIZE
+	JLT	END
+	CLR*	!TAIL_F	;*tail = 0 if > Q_SIZE
+
+END:	LDA#	0
+	STA	!FOODFLAG	;RESET FOODFLAG
+	LDA	!OKK	;return OKK
+	ADS#	4
+	POPF
+	RTN
+
+	.equ curr_score, 3
+	.equ curr_lives, 2
+showScore:	BGN# 0
+	PSHA
+	LDA# TOP+1
+	OUTB CRT_YREG
+	LDA# LEFT+15
+	OUTB CRT_XREG
+	PSH# score_disp_len
+	PSH# score_disp
+	JSR PUT_STR
+	ADS# 2
+	LDA !curr_score
+	JSR PUT_NUM2
+	LDA# TOP+2
+	OUTB CRT_YREG
+	LDA# LEFT+15
+	OUTB CRT_XREG
+	PSH# lives_disp_len
+	PSH# lives_disp
+	JSR PUT_STR
+	ADS# 2
+	LDA !curr_lives
+	JSR PUT_NUM2
+	CMA# 0
+	JNE finishScore
+	LDA# TOP+3
+	OUTB CRT_YREG
+	LDA# LEFT+15
+	OUTB CRT_XREG
+	PSH# over_len
+	PSH# game_over
+	JSR PUT_STR
+	ADS# 2
+finishScore:	LDA# 100
+	OUTB CRT_YREG
+	POPA
+	FIN# 0
+	RTN ;works
+
+KEYISR:	PSHA
+	lda#	0
+	outb	KBD_CNTL	; transfers lower 8 bit of acc to port $000
+	INB 	KBD_DATA	; ACC[0..7] = port[$000]
+	CMA#	'x'
+	JNE 	DECSPEED
+	JMP	done
+
+DECSPEED:	CMA#	','
+	JNE	INCSPEED
+	LDA	delay	;every time a food is eaten, snake speed goes up
+	MUL#	11
+	DIV#	10
+	STA	delay
+	OUTW 	TIM_RELOAD
+	jmp	keydone
+
+INCSPEED:	CMA#	'.'
+	JNE	KEY1
+	LDA	delay
+	MUL#	10
+	DIV#	11	
+	STA	delay
+	OUTW	TIM_RELOAD
+	jmp	keydone
+
+KEY1:	cma# 	SPACE
+	JEQ 	pause
+	cma#	$1B
+	jne	KeyDone
+	inb	kbd_data
+
+	cma#	$48	; if up cursor
+	jne	Key2	; if not up, check if down
+	LDX 	direction	;check direction
+	CMX# 	KEY_DOWN
+	JEQ 	KeyDone	;no suicides!
+	lda# 	KEY_UP	; set to up
+	jmp	directionKey
+
+Key2:	cma#	$50	; if down cursor
+	jne	Key3
+	LDX 	direction
+	CMX# 	KEY_UP
+	JEQ 	KeyDone
+	lda# 	KEY_DOWN
+	jmp	directionKey
+
+Key3:	cma#	$4B	; if left cursor
+	jne	Key4
+	LDX 	direction
+	CMX# 	KEY_RIGHT
+	JEQ 	KeyDone
+	lda#	KEY_LEFT
+	jmp	directionKey
+
+Key4:	cma#	$4D	; if right cursor
+	jne	KeyDone	
+	LDX 	direction
+	CMX# 	KEY_LEFT
+	JEQ 	KeyDone
+	lda#	KEY_RIGHT
+
+directionKey:	;psh#	HEAD	; int *head
+	;psh#	TAIL	; int *tail
+	;psha		; int direction: up, down, left, right arrow
+	;psh#	Q	; int Q[]
+	;psh# 	SCORE	; int *score
+	;jsr	moveSnake
+	;ads# 	5
+	STA 	direction
+
+KeyDone:	lda# 	INTERRUPT_ENA
+	outb	KBD_CNTL
+	POPA
+	IRTN
+pause:	LDA status
+	CMA# PAUSE_GAME
+	JNE pause_set
+	LDA prev_status
+	STA status
+	JMP KeyDone
+pause_set:	LDA status
+	STA prev_status
+	LDA# PAUSE_GAME
+	STA status
+	JMP KeyDone
+
+TIMERISR: 	PSHA
+	LDA status
+	CMA# COUNTDOWN
+	jeq count_down
+	CMA# SCORE_CNT
+	jeq score_time
+	CMA# PLAY_CNT
+	jeq play
+	CMA# PAUSE_GAME
+	jeq finishTimer
+	jmp TIMERISR
+count_down:	LDA timerCount
+	CMA# 0
+	jne cont_cnt
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	LDA# PLAY_CNT
+	STA status
+	PSH BODY
+	PSH# head
+	PSH# tail
+	PSH# direction
+	PSH# Q
+	JSR startSnake
+	ADS# 5
+	JMP end_cnt_dn
+cont_cnt:	LDA# TOP+1
+	OUTB CRT_YREG
+	LDA# LEFT+17
+	OUTB CRT_XREG
+	LDA timerCount
+	JSR PUT_NUM
+	LDA# 100
+	OUTB CRT_YREG
+	DEC timerCount
+end_cnt_dn:	JMP finishTimer
+score_time:	LDA timerCount
+	CMA# 0
+	jne cont_scr
+	LDA lives
+	CMA# 0
+	JEQ done
+	LDA# CLEAR_DISPLAY
+	OUTB CRT_CNTL
+	LDA# COUNTDOWN
+	STA status
+	LDA# 3
+	STA timerCount
+	JMP end_scr
+cont_scr:	PSH score
+	PSH lives
+	JSR showScore
+	ADS# 2
+	DEC timerCount
+end_scr:	JMP finishTimer
+play:	psh# delay
+	psh BODY
+	psh#	head	; int *head
+	psh#	tail	; int *tail
+	psh 	direction	;direction of motion
+	psh#	Q	; int Q[]
+	psh# 	score	; int *score
+	;psh# OKK	;is the snake dead?
+	jsr	moveSnake
+	ads# 	7	;ads#6
+	;LDA tempvar	;temp
+	;STA OKK	;temp
+	CMA# 1		;1 = alive, 0 = dead
+	JEQ finishTimer
+	DEC lives
+	LDA# SCORE_CNT
+	STA status
+	LDA# 5
+	STA timerCount
+	LDA orig_delay	;reset delay
+	STA delay
+	OUTW TIM_RELOAD
+	JMP finishTimer
+finishTimer:	LDA# ENABLE_AND_RESET
+          	OUTB TIM_CNTL
+          	POPA
+	IRTN
+done:	HLT
+BODY:	.word
+Q:	.blkw Q_SIZE
+head:	.word
+tail:	.word
+score:	.word
+seed:	.word
+delay:	.word
+orig_delay:	.word 5000
+lives:	.word
+status:	.word
+prev_status:	.word
+timerCount:	.word
+direction:	.word
+tempvar:	.word
+seed_prompt:	.char 'Seed', seedlen
+score_disp:	.char 'Score: ', score_disp_len
+lives_disp:	.char 'Lives: ', lives_disp_len
+game_over:	.char 'Game Over', over_len
+STRING1:	.CHAR 'Options implemented:\CR\LF', STRING1L
+STRING2:	.CHAR '1. Custom Character\CR\LF', STRING2L
+STRING3:	.CHAR '2. Head is different from the body\CR\LF', STRING3L
+STRING4:	.CHAR '3. Pause Game by toggling Space\CR\LF', STRING4L
+STRING5:	.CHAR '4. When food eaten, snake goes faster\CR\LF', STRING5L
+STRING6:	.CHAR	'5. "," to decrease speed by 10% \CR\LF   "." to increase speed by 10%\CR\LF', STRING6L
+STRING7:	.CHAR '\CR\LF', STRING7L
+STRING8:	.CHAR 'Created By:\CR\LF', STRING8L
+STRING9:	.CHAR 'Shyam Pinnipati\CR\LF', STRING9L
+STRING10:	.CHAR 'Nguyen Ngo\CR\LF', STRING10L
+STRING11:	.CHAR 'Press Enter to continue...', STRING11L
+	;.CHAR '2. Head is different from the rest of the body\CR\LF', 
+	;.CHAR	'5. "," to decrease speed by 10%, "." to increase speed by 10%\CR\LF', 
+char_prompt: 	.char 'CHOOSE YOUR CHARACTER (enter ASCII value in decimal)', char_len
